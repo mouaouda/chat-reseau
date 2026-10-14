@@ -1,5 +1,6 @@
 package chatreseau.util;
 
+import chatreseau.ui.ModernButton;
 import chatreseau.ui.NotificationToast;
 
 import javax.swing.BorderFactory;
@@ -215,24 +216,14 @@ public class UpdateManager {
         JPanel bottomBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 12));
         bottomBar.setBackground(new Color(32, 34, 37));
 
-        JButton updateWithGhBtn = new JButton("⚡ Télécharger via gh");
-        updateWithGhBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        updateWithGhBtn.setBackground(new Color(88, 101, 242)); // Blurple Discord
-        updateWithGhBtn.setForeground(Color.WHITE);
-        updateWithGhBtn.setFocusPainted(false);
-        updateWithGhBtn.setBorder(new EmptyBorder(9, 16, 9, 16));
-        updateWithGhBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        ModernButton updateWithGhBtn = new ModernButton("Telecharger via gh", new Color(88, 101, 242));
+        updateWithGhBtn.setPreferredSize(new Dimension(170, 36));
         updateWithGhBtn.addActionListener(e -> {
             Thread.startVirtualThread(() -> runGhDownload(dialog, release.tagName()));
         });
 
-        JButton openBrowserBtn = new JButton("🌐 Voir sur GitHub");
-        openBrowserBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        openBrowserBtn.setBackground(new Color(5, 150, 105)); // Vert
-        openBrowserBtn.setForeground(Color.WHITE);
-        openBrowserBtn.setFocusPainted(false);
-        openBrowserBtn.setBorder(new EmptyBorder(9, 16, 9, 16));
-        openBrowserBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        ModernButton openBrowserBtn = new ModernButton("Voir sur GitHub", new Color(5, 150, 105));
+        openBrowserBtn.setPreferredSize(new Dimension(140, 36));
         openBrowserBtn.addActionListener(e -> {
             try {
                 if (release.url() != null && !release.url().isEmpty()) {
@@ -243,13 +234,8 @@ public class UpdateManager {
             }
         });
 
-        JButton closeBtn = new JButton("Fermer");
-        closeBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        closeBtn.setBackground(new Color(71, 85, 105)); // Gris ardoise
-        closeBtn.setForeground(Color.WHITE);
-        closeBtn.setFocusPainted(false);
-        closeBtn.setBorder(new EmptyBorder(9, 16, 9, 16));
-        closeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        ModernButton closeBtn = new ModernButton("Fermer", new Color(71, 85, 105));
+        closeBtn.setPreferredSize(new Dimension(90, 36));
         closeBtn.addActionListener(e -> dialog.dispose());
 
         bottomBar.add(updateWithGhBtn);

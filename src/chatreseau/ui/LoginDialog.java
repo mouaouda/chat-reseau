@@ -49,7 +49,7 @@ public class LoginDialog extends JDialog {
     private final JTextField usernameField = new JTextField();
     private final JPanel suggestionsBox = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
     private final JLabel statusLabel = new JLabel(" ");
-    private final JButton submitButton = new JButton("Rejoindre le chat réseau");
+    private final ModernButton submitButton = new ModernButton("Rejoindre le chat reseau", PRIMARY_COLOR);
 
     public LoginDialog(Frame parent, NetworkManager networkManager, String initialConflictName) {
         super(parent, "Inscription - Chat Réseau Local", true);
@@ -170,15 +170,11 @@ public class LoginDialog extends JDialog {
         mainCard.add(statusLabel);
         mainCard.add(Box.createVerticalStrut(12));
 
-        // Bouton de validation
+        // Bouton de validation ModernButton
         submitButton.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        submitButton.setBackground(PRIMARY_COLOR);
-        submitButton.setForeground(Color.WHITE);
-        submitButton.setFocusPainted(false);
-        submitButton.setBorder(new EmptyBorder(11, 20, 11, 20));
-        submitButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         submitButton.setAlignmentX(Component.LEFT_ALIGNMENT);
         submitButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        submitButton.setPreferredSize(new Dimension(380, 44));
         submitButton.addActionListener(e -> onSubmit());
 
         mainCard.add(submitButton);
@@ -253,16 +249,9 @@ public class LoginDialog extends JDialog {
         List<String> suggestions = networkManager.generateAvailableSuggestions(nameField.getText().trim());
         suggestionsBox.removeAll();
         for (String suggestion : suggestions) {
-            JButton chip = new JButton("👉 Utiliser " + suggestion);
+            ModernButton chip = new ModernButton("Utiliser " + suggestion, new Color(30, 58, 138));
             chip.setFont(new Font("Segoe UI", Font.BOLD, 12));
-            chip.setBackground(new Color(30, 58, 138)); // Bleu foncé vibrant (plus jamais blanc !)
-            chip.setForeground(Color.WHITE);
-            chip.setFocusPainted(false);
-            chip.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            chip.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(new Color(59, 130, 246), 1, true),
-                    new EmptyBorder(6, 12, 6, 12)
-            ));
+            chip.setPreferredSize(new Dimension(150, 32));
             chip.addActionListener(e -> {
                 usernameField.setText(suggestion);
                 usernameField.requestFocusInWindow();

@@ -74,22 +74,12 @@ public class ImageViewerDialog extends JDialog {
         JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         buttonsPanel.setOpaque(false);
 
-        JButton saveBtn = new JButton("💾 Enregistrer l'image");
-        saveBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        saveBtn.setBackground(BTN_SAVE);
-        saveBtn.setForeground(Color.WHITE);
-        saveBtn.setFocusPainted(false);
-        saveBtn.setBorder(new EmptyBorder(8, 16, 8, 16));
-        saveBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        ModernButton saveBtn = new ModernButton("Enregistrer l'image", BTN_SAVE);
+        saveBtn.setPreferredSize(new Dimension(170, 36));
         saveBtn.addActionListener(e -> saveImage(img, senderName));
 
-        JButton closeBtn = new JButton("Fermer");
-        closeBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        closeBtn.setBackground(BTN_CLOSE);
-        closeBtn.setForeground(Color.WHITE);
-        closeBtn.setFocusPainted(false);
-        closeBtn.setBorder(new EmptyBorder(8, 16, 8, 16));
-        closeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        ModernButton closeBtn = new ModernButton("Fermer", BTN_CLOSE);
+        closeBtn.setPreferredSize(new Dimension(90, 36));
         closeBtn.addActionListener(e -> dispose());
 
         buttonsPanel.add(saveBtn);

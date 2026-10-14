@@ -99,7 +99,7 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
     private final JPanel messagesContainer = new JPanel();
     private final JScrollPane messagesScrollPane;
     private final JTextField messageInput = new JTextField();
-    private final JButton sendButton = new JButton("Envoyer");
+    private final ModernButton sendButton = new ModernButton("Envoyer >", new Color(37, 99, 235));
 
     private Timer typingResetTimer;
     private long lastTypingSentTime = 0;
@@ -220,37 +220,22 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
         sidebarFooter.setBackground(SIDEBAR_BG);
         sidebarFooter.setBorder(new EmptyBorder(10, 14, 14, 14));
 
-        JButton refreshBtn = new JButton("↻ Actualiser le réseau");
-        refreshBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        refreshBtn.setBackground(new Color(37, 99, 235)); // Bleu royal vif
-        refreshBtn.setForeground(Color.WHITE);
-        refreshBtn.setFocusPainted(false);
-        refreshBtn.setBorder(new EmptyBorder(8, 12, 8, 12));
-        refreshBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        ModernButton refreshBtn = new ModernButton("Actualiser le reseau", new Color(37, 99, 235));
         refreshBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        refreshBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        refreshBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        refreshBtn.setPreferredSize(new Dimension(260, 38));
         refreshBtn.addActionListener(e -> Thread.startVirtualThread(networkManager::sendWhoIsHere));
 
-        JButton testInstanceBtn = new JButton("+ Tester un autre utilisateur (même PC)");
-        testInstanceBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        testInstanceBtn.setBackground(new Color(51, 65, 85)); // Ardoise foncée
-        testInstanceBtn.setForeground(Color.WHITE);
-        testInstanceBtn.setFocusPainted(false);
-        testInstanceBtn.setBorder(new EmptyBorder(8, 12, 8, 12));
-        testInstanceBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        ModernButton testInstanceBtn = new ModernButton("+ Tester un profil (meme PC)", new Color(51, 65, 85));
         testInstanceBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        testInstanceBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        testInstanceBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        testInstanceBtn.setPreferredSize(new Dimension(260, 38));
         testInstanceBtn.addActionListener(e -> Main.launchNewClientInstance());
 
-        JButton updateBtn = new JButton("⚡ Mises à jour GitHub");
-        updateBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        updateBtn.setBackground(new Color(124, 58, 237)); // Violet vibrant
-        updateBtn.setForeground(Color.WHITE);
-        updateBtn.setFocusPainted(false);
-        updateBtn.setBorder(new EmptyBorder(8, 12, 8, 12));
-        updateBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        ModernButton updateBtn = new ModernButton("Mises a jour GitHub", new Color(124, 58, 237));
         updateBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        updateBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        updateBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        updateBtn.setPreferredSize(new Dimension(260, 38));
         updateBtn.addActionListener(e -> UpdateManager.checkForUpdatesAsync(this, true));
 
         sidebarFooter.add(refreshBtn);
@@ -351,24 +336,14 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
             }
         });
 
-        // Bouton Image (Vert émeraude - aucun bouton blanc)
-        JButton imageBtn = new JButton("📷 Image");
-        imageBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        imageBtn.setBackground(new Color(5, 150, 105)); // Vert émeraude
-        imageBtn.setForeground(Color.WHITE);
-        imageBtn.setFocusPainted(false);
-        imageBtn.setBorder(new EmptyBorder(10, 16, 10, 16));
-        imageBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        // Bouton Image (Vert émeraude - ModernButton)
+        ModernButton imageBtn = new ModernButton("Image", new Color(5, 150, 105));
+        imageBtn.setPreferredSize(new Dimension(85, 38));
         imageBtn.addActionListener(e -> chooseAndSendImage());
 
-        // Bouton Envoyer (Bleu royal - aucun bouton blanc)
-        sendButton.setText("Envoyer ➔");
-        sendButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        sendButton.setBackground(new Color(37, 99, 235));
-        sendButton.setForeground(Color.WHITE);
-        sendButton.setFocusPainted(false);
-        sendButton.setBorder(new EmptyBorder(10, 20, 10, 20));
-        sendButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        // Bouton Envoyer (Bleu royal - ModernButton)
+        sendButton.setText("Envoyer >");
+        sendButton.setPreferredSize(new Dimension(95, 38));
         sendButton.addActionListener(e -> sendCurrentMessage());
 
         JPanel inputActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
