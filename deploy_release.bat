@@ -76,7 +76,11 @@ echo Téléversement de :
 echo  - CHAT_RESEAU.jar
 echo  - ChatReseau_Windows_x64.zip
 echo.
-gh release create !TAG! CHAT_RESEAU.jar ChatReseau_Windows_x64.zip --title "!TITLE!" --notes "!NOTES!" --clobber
+gh release create !TAG! CHAT_RESEAU.jar ChatReseau_Windows_x64.zip --title "!TITLE!" --notes "!NOTES!"
+if %errorlevel% neq 0 (
+    echo La release existe déjà sur GitHub, remplacement des fichiers existants...
+    gh release upload !TAG! CHAT_RESEAU.jar ChatReseau_Windows_x64.zip --clobber
+)
 if %errorlevel% equ 0 (
     echo.
     echo =====================================================================
