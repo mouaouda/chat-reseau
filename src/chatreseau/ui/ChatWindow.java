@@ -4,6 +4,8 @@ import chatreseau.Main;
 import chatreseau.model.ChatMessage;
 import chatreseau.model.PeerUser;
 import chatreseau.network.NetworkManager;
+import chatreseau.util.ImageUtil;
+import chatreseau.util.UpdateManager;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -20,12 +22,15 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
+import javax.swing.ImageIcon;
+import javax.swing.JFileChooser;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -33,8 +38,18 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Image;
+import java.awt.Toolkit;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -114,6 +129,11 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
 
         addSystemMessage(GENERAL_CHANNEL_ID,
                 "Bienvenue " + networkManager.getMyUsername() + " ! Vous ne pouvez discuter qu'avec les personnes présentes sur votre réseau local.");
+
+        // Vérification automatique des mises à jour GitHub Releases (via gh)
+        Timer updateCheckTimer = new Timer(2500, e -> UpdateManager.checkForUpdatesAsync(this, false));
+        updateCheckTimer.setRepeats(false);
+        updateCheckTimer.start();
 
         addWindowListener(new WindowAdapter() {
             @Override
@@ -202,8 +222,8 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
 
         JButton refreshBtn = new JButton("↻ Actualiser le réseau");
         refreshBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        refreshBtn.setBackground(new Color(30, 58, 138));
-        refreshBtn.setForeground(SIDEBAR_TEXT);
+        refreshBtn.setBackground(new Color(37, 99, 235)); // Bleu royal vif
+        refreshBtn.setForeground(Color.WHITE);
         refreshBtn.setFocusPainted(false);
         refreshBtn.setBorder(new EmptyBorder(8, 12, 8, 12));
         refreshBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -211,10 +231,10 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
         refreshBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         refreshBtn.addActionListener(e -> Thread.startVirtualThread(networkManager::sendWhoIsHere));
 
-        JButton testInstanceBtn = new JButton("+ Tester une autre personne (même PC)");
+        JButton testInstanceBtn = new JButton("+ Tester un autre utilisateur (même PC)");
         testInstanceBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        testInstanceBtn.setBackground(new Color(51, 65, 85));
-        testInstanceBtn.setForeground(SIDEBAR_TEXT);
+        testInstanceBtn.setBackground(new Color(51, 65, 85)); // Ardoise foncée
+        testInstanceBtn.setForeground(Color.WHITE);
         testInstanceBtn.setFocusPainted(false);
         testInstanceBtn.setBorder(new EmptyBorder(8, 12, 8, 12));
         testInstanceBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -222,9 +242,22 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
         testInstanceBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         testInstanceBtn.addActionListener(e -> Main.launchNewClientInstance());
 
+        JButton updateBtn = new JButton("⚡ Mises à jour GitHub");
+        updateBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        updateBtn.setBackground(new Color(124, 58, 237)); // Violet vibrant
+        updateBtn.setForeground(Color.WHITE);
+        updateBtn.setFocusPainted(false);
+        updateBtn.setBorder(new EmptyBorder(8, 12, 8, 12));
+        updateBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        updateBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        updateBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        updateBtn.addActionListener(e -> UpdateManager.checkForUpdatesAsync(this, true));
+
         sidebarFooter.add(refreshBtn);
         sidebarFooter.add(Box.createVerticalStrut(6));
         sidebarFooter.add(testInstanceBtn);
+        sidebarFooter.add(Box.createVerticalStrut(6));
+        sidebarFooter.add(updateBtn);
 
         sidebar.add(profileHeader, BorderLayout.NORTH);
         sidebar.add(centerSidebar, BorderLayout.CENTER);
@@ -256,18 +289,25 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
         headerTitles.add(Box.createVerticalStrut(2));
         headerTitles.add(chatSubtitleLabel);
 
-        typingLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
-        typingLabel.setForeground(SIDEBAR_ITEM_SELECTED);
-
         chatHeader.add(headerTitles, BorderLayout.WEST);
-        chatHeader.add(typingLabel, BorderLayout.EAST);
+
+        // Indicateur d'écriture placé juste AU-DESSUS de la zone d'écriture
+        JPanel typingBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 2));
+        typingBar.setBackground(CHAT_BG);
+        typingBar.setOpaque(true);
+        typingBar.setPreferredSize(new Dimension(0, 24));
+
+        typingLabel.setFont(new Font("Segoe UI", Font.BOLD | Font.ITALIC, 11));
+        typingLabel.setForeground(new Color(37, 99, 235));
+        typingLabel.setText(" ");
+        typingBar.add(typingLabel);
 
         // Barre d'écriture en bas
         JPanel inputBar = new JPanel(new BorderLayout(10, 0));
         inputBar.setBackground(Color.WHITE);
         inputBar.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(226, 232, 240)),
-                new EmptyBorder(12, 20, 12, 20)
+                new EmptyBorder(10, 20, 10, 20)
         ));
 
         messageInput.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -291,20 +331,64 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
             }
         });
 
-        sendButton.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        sendButton.setBackground(MY_BUBBLE_BG);
+        // Prise en charge du collage d'images (Ctrl+V) depuis le presse-papier (screenshots Win+Shift+S)
+        messageInput.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.isControlDown() && e.getKeyCode() == KeyEvent.VK_V) {
+                    try {
+                        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+                        if (clipboard.isDataFlavorAvailable(DataFlavor.imageFlavor)) {
+                            Image clipImg = (Image) clipboard.getData(DataFlavor.imageFlavor);
+                            if (clipImg != null) {
+                                e.consume();
+                                promptAndSendClipboardImage(clipImg);
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        });
+
+        // Bouton Image (Vert émeraude - aucun bouton blanc)
+        JButton imageBtn = new JButton("📷 Image");
+        imageBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        imageBtn.setBackground(new Color(5, 150, 105)); // Vert émeraude
+        imageBtn.setForeground(Color.WHITE);
+        imageBtn.setFocusPainted(false);
+        imageBtn.setBorder(new EmptyBorder(10, 16, 10, 16));
+        imageBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        imageBtn.addActionListener(e -> chooseAndSendImage());
+
+        // Bouton Envoyer (Bleu royal - aucun bouton blanc)
+        sendButton.setText("Envoyer ➔");
+        sendButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        sendButton.setBackground(new Color(37, 99, 235));
         sendButton.setForeground(Color.WHITE);
         sendButton.setFocusPainted(false);
-        sendButton.setBorder(new EmptyBorder(10, 22, 10, 22));
+        sendButton.setBorder(new EmptyBorder(10, 20, 10, 20));
         sendButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         sendButton.addActionListener(e -> sendCurrentMessage());
 
+        JPanel inputActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        inputActions.setOpaque(false);
+        inputActions.add(imageBtn);
+        inputActions.add(sendButton);
+
         inputBar.add(messageInput, BorderLayout.CENTER);
-        inputBar.add(sendButton, BorderLayout.EAST);
+        inputBar.add(inputActions, BorderLayout.EAST);
+
+        // Conteneur bas regroupant l'indicateur d'écriture et la barre d'écriture
+        JPanel bottomContainer = new JPanel();
+        bottomContainer.setLayout(new BoxLayout(bottomContainer, BoxLayout.Y_AXIS));
+        bottomContainer.setOpaque(false);
+        bottomContainer.add(typingBar);
+        bottomContainer.add(inputBar);
 
         rightPanel.add(chatHeader, BorderLayout.NORTH);
         rightPanel.add(messagesScrollPane, BorderLayout.CENTER);
-        rightPanel.add(inputBar, BorderLayout.SOUTH);
+        rightPanel.add(bottomContainer, BorderLayout.SOUTH);
 
         add(sidebar, BorderLayout.WEST);
         add(rightPanel, BorderLayout.CENTER);
@@ -497,17 +581,132 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
         metaLabel.setFont(new Font("Segoe UI", Font.BOLD, 11));
         metaLabel.setForeground(isMe ? new Color(191, 219, 254) : new Color(100, 116, 139));
 
-        String safeHtml = escapeHtml(msg.getContent());
-        JLabel contentLabel = new JLabel("<html><body style='width: 340px; font-family: Segoe UI; font-size: 11pt;'>" + safeHtml + "</body></html>");
-        contentLabel.setForeground(isMe ? Color.WHITE : new Color(15, 23, 42));
-
         bubble.add(metaLabel);
         bubble.add(Box.createVerticalStrut(4));
-        bubble.add(contentLabel);
+
+        // Affichage de l'image si présente
+        if (msg.hasImage()) {
+            BufferedImage thumb = ImageUtil.createThumbnail(msg.getImageData());
+            if (thumb != null) {
+                JLabel imgLabel = new JLabel(new ImageIcon(thumb));
+                imgLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                imgLabel.setToolTipText("Cliquer pour agrandir ou enregistrer l'image 🔍");
+                imgLabel.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseClicked(MouseEvent e) {
+                        new ImageViewerDialog(ChatWindow.this, msg.getSenderName(), msg.getImageData(), msg.getContent()).setVisible(true);
+                    }
+                });
+                bubble.add(imgLabel);
+                bubble.add(Box.createVerticalStrut(4));
+            }
+        }
+
+        // Affichage du texte ou légende
+        if (msg.getContent() != null && !msg.getContent().isBlank()) {
+            String safeHtml = escapeHtml(msg.getContent());
+            JLabel contentLabel = new JLabel("<html><body style='width: 340px; font-family: Segoe UI; font-size: 11pt;'>" + safeHtml + "</body></html>");
+            contentLabel.setForeground(isMe ? Color.WHITE : new Color(15, 23, 42));
+            bubble.add(contentLabel);
+        }
 
         row.add(bubble);
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, bubble.getPreferredSize().height + 12));
         return row;
+    }
+
+    private void chooseAndSendImage() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Choisir une image à envoyer sur le réseau");
+        chooser.setFileFilter(new FileNameExtensionFilter("Images (*.png, *.jpg, *.jpeg, *.gif, *.bmp)", "png", "jpg", "jpeg", "gif", "bmp"));
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = chooser.getSelectedFile();
+            Thread.startVirtualThread(() -> {
+                try {
+                    byte[] imgData = ImageUtil.prepareImageForSending(selectedFile);
+                    String caption = messageInput.getText().trim();
+                    sendImageBytes(imgData, caption);
+                    SwingUtilities.invokeLater(() -> messageInput.setText(""));
+                } catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                            ChatWindow.this,
+                            "Erreur lors du traitement de l'image : " + ex.getMessage(),
+                            "Erreur d'image",
+                            JOptionPane.ERROR_MESSAGE
+                    ));
+                }
+            });
+        }
+    }
+
+    private void promptAndSendClipboardImage(Image clipImg) {
+        int choice = JOptionPane.showConfirmDialog(
+                this,
+                "Une capture d'écran / image est présente dans votre presse-papier.\nVoulez-vous l'envoyer dans cette discussion ?",
+                "Envoyer la capture d'écran",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE
+        );
+        if (choice == JOptionPane.YES_OPTION) {
+            Thread.startVirtualThread(() -> {
+                try {
+                    BufferedImage bimg;
+                    if (clipImg instanceof BufferedImage bi) {
+                        bimg = bi;
+                    } else {
+                        bimg = new BufferedImage(clipImg.getWidth(null), clipImg.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+                        var g = bimg.createGraphics();
+                        g.drawImage(clipImg, 0, 0, null);
+                        g.dispose();
+                    }
+                    byte[] imgData = ImageUtil.processAndCompress(bimg);
+                    String caption = messageInput.getText().trim();
+                    sendImageBytes(imgData, caption);
+                    SwingUtilities.invokeLater(() -> messageInput.setText(""));
+                } catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                            ChatWindow.this,
+                            "Erreur lors de l'envoi de la capture : " + ex.getMessage()
+                    ));
+                }
+            });
+        }
+    }
+
+    private void sendImageBytes(byte[] imgData, String caption) {
+        if (GENERAL_CHANNEL_ID.equals(activeConversationId)) {
+            ChatMessage myMsg = new ChatMessage(
+                    networkManager.getMyId(),
+                    networkManager.getMyUsername(),
+                    GENERAL_CHANNEL_ID,
+                    caption,
+                    imgData,
+                    true,
+                    ChatMessage.Type.IMAGE_GENERAL
+            );
+            appendMessage(GENERAL_CHANNEL_ID, myMsg);
+            networkManager.sendImageGeneral(imgData, caption);
+        } else {
+            PeerUser target = networkManager.getPeer(activeConversationId);
+            if (target == null) {
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                        ChatWindow.this,
+                        "Cette personne n'est plus joignable sur le réseau local."
+                ));
+                return;
+            }
+            ChatMessage myMsg = new ChatMessage(
+                    networkManager.getMyId(),
+                    networkManager.getMyUsername(),
+                    target.getId(),
+                    caption,
+                    imgData,
+                    true,
+                    ChatMessage.Type.IMAGE_PRIVATE
+            );
+            appendMessage(target.getId(), myMsg);
+            networkManager.sendImagePrivate(target.getId(), imgData, caption);
+        }
     }
 
     private void scrollToBottom() {
@@ -615,11 +814,16 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
                 // Notifier si la fenêtre est minimisée, en arrière-plan, ou si on consulte un autre salon
                 if (!isWindowFocused || !isCurrentConv) {
                     String title = message.getSenderName();
-                    String subtitle = (message.getType() == ChatMessage.Type.GENERAL) ? "• Salon Général" : "• Message Privé";
+                    boolean isGeneral = (message.getType() == ChatMessage.Type.GENERAL || message.getType() == ChatMessage.Type.IMAGE_GENERAL);
+                    String subtitle = isGeneral ? "• Salon Général" : "• Message Privé";
+                    String preview = message.hasImage()
+                            ? ("📷 Photo partagée" + (message.getContent().isBlank() ? "" : " : " + message.getContent()))
+                            : message.getContent();
+
                     NotificationToast toast = new NotificationToast(
                             title,
                             subtitle,
-                            message.getContent(),
+                            preview,
                             () -> bringToFrontAndSelect(convId)
                     );
                     toast.showNotification();

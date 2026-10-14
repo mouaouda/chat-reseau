@@ -2,6 +2,7 @@ package chatreseau.network;
 
 import chatreseau.model.ChatMessage;
 import chatreseau.model.PeerUser;
+import chatreseau.util.ImageUtil;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -664,6 +665,42 @@ public class NetworkManager {
     }
 
     /**
+     * Envoie une image en message privé via TCP direct.
+     */
+    public boolean sendImagePrivate(String targetPeerId, byte[] imageData, String caption) {
+        PeerUser target = peers.get(targetPeerId);
+        if (target == null || !isLocalNetworkAddress(target.getAddress())) {
+            return false;
+        }
+        String msgId = UUID.randomUUID().toString();
+        processedMessageIds.add(msgId);
+        String imageBase64 = ImageUtil.encodeBase64(imageData);
+        String captionBase64 = encode(caption != null ? caption : "");
+        String line = "MSG_IMAGE_PRIVATE|" + myId + "|" + msgId + "|" + targetPeerId + "|" + encode(myUsername) + "|" + captionBase64 + "|" + imageBase64;
+        return sendTcpLine(target.getAddress(), target.getTcpPort(), line);
+    }
+
+    /**
+     * Envoie une image à toutes les personnes du réseau local (Salon Général) via TCP direct.
+     */
+    public int sendImageGeneral(byte[] imageData, String caption) {
+        String msgId = UUID.randomUUID().toString();
+        processedMessageIds.add(msgId);
+        String imageBase64 = ImageUtil.encodeBase64(imageData);
+        String captionBase64 = encode(caption != null ? caption : "");
+        String line = "MSG_IMAGE_GENERAL|" + myId + "|" + msgId + "|" + encode(myUsername) + "|" + captionBase64 + "|" + imageBase64;
+        int sent = 0;
+        for (PeerUser peer : peers.values()) {
+            if (isLocalNetworkAddress(peer.getAddress())) {
+                final String l = line;
+                Thread.startVirtualThread(() -> sendTcpLine(peer.getAddress(), peer.getTcpPort(), l));
+                sent++;
+            }
+        }
+        return sent;
+    }
+
+    /**
      * Envoie une notification "en train d'écrire..." en UDP (instantané, non bloquant).
      */
     public void sendTypingIndicator(String targetId) {
@@ -702,8 +739,8 @@ public class NetworkManager {
             return false;
         }
         try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(address, port), 1200);
-            socket.setSoTimeout(1200);
+            socket.connect(new InetSocketAddress(address, port), 3000);
+            socket.setSoTimeout(4000);
             PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
             out.println(line);
             return true;
@@ -733,7 +770,7 @@ public class NetworkManager {
     private void handleTcpClient(Socket client) {
         try (client;
              BufferedReader reader = new BufferedReader(new InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8))) {
-            client.setSoTimeout(2000);
+            client.setSoTimeout(5000);
             String line = reader.readLine();
             if (line == null) return;
 
@@ -742,9 +779,6 @@ public class NetworkManager {
 
             String type = parts[0];
             String senderId = parts[1];
-            String senderName = decode(parts[2]);
-            String payload = decode(parts[3]);
-            String msgId = parts.length >= 5 ? parts[4] : UUID.randomUUID().toString();
 
             if (myId.equals(senderId)) return;
 
@@ -755,6 +789,9 @@ public class NetworkManager {
 
             switch (type) {
                 case "MSG_PRIVATE" -> {
+                    String senderName = decode(parts[2]);
+                    String payload = decode(parts[3]);
+                    String msgId = parts.length >= 5 ? parts[4] : UUID.randomUUID().toString();
                     if (processedMessageIds.add(msgId)) {
                         ChatMessage msg = new ChatMessage(senderId, senderName, myId, payload, false, ChatMessage.Type.PRIVATE);
                         for (NetworkListener l : listeners) {
@@ -763,10 +800,46 @@ public class NetworkManager {
                     }
                 }
                 case "MSG_GENERAL" -> {
+                    String senderName = decode(parts[2]);
+                    String payload = decode(parts[3]);
+                    String msgId = parts.length >= 5 ? parts[4] : UUID.randomUUID().toString();
                     if (processedMessageIds.add(msgId)) {
                         ChatMessage msg = new ChatMessage(senderId, senderName, "ALL", payload, false, ChatMessage.Type.GENERAL);
                         for (NetworkListener l : listeners) {
                             l.onMessageReceived(msg);
+                        }
+                    }
+                }
+                case "MSG_IMAGE_PRIVATE" -> {
+                    // Format: MSG_IMAGE_PRIVATE|senderId|msgId|targetId|senderName|captionBase64|imageBase64
+                    if (parts.length >= 7) {
+                        String msgId = parts[2];
+                        String targetId = parts[3];
+                        String senderName = decode(parts[4]);
+                        String caption = decode(parts[5]);
+                        byte[] imgBytes = ImageUtil.decodeBase64(parts[6]);
+
+                        if (myId.equals(targetId) && imgBytes != null && processedMessageIds.add(msgId)) {
+                            ChatMessage msg = new ChatMessage(senderId, senderName, myId, caption, imgBytes, false, ChatMessage.Type.IMAGE_PRIVATE);
+                            for (NetworkListener l : listeners) {
+                                l.onMessageReceived(msg);
+                            }
+                        }
+                    }
+                }
+                case "MSG_IMAGE_GENERAL" -> {
+                    // Format: MSG_IMAGE_GENERAL|senderId|msgId|senderName|captionBase64|imageBase64
+                    if (parts.length >= 6) {
+                        String msgId = parts[2];
+                        String senderName = decode(parts[3]);
+                        String caption = decode(parts[4]);
+                        byte[] imgBytes = ImageUtil.decodeBase64(parts[5]);
+
+                        if (imgBytes != null && processedMessageIds.add(msgId)) {
+                            ChatMessage msg = new ChatMessage(senderId, senderName, "ALL", caption, imgBytes, false, ChatMessage.Type.IMAGE_GENERAL);
+                            for (NetworkListener l : listeners) {
+                                l.onMessageReceived(msg);
+                            }
                         }
                     }
                 }

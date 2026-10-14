@@ -253,15 +253,15 @@ public class LoginDialog extends JDialog {
         List<String> suggestions = networkManager.generateAvailableSuggestions(nameField.getText().trim());
         suggestionsBox.removeAll();
         for (String suggestion : suggestions) {
-            JButton chip = new JButton(suggestion);
+            JButton chip = new JButton("👉 Utiliser " + suggestion);
             chip.setFont(new Font("Segoe UI", Font.BOLD, 12));
-            chip.setBackground(Color.WHITE);
-            chip.setForeground(PRIMARY_COLOR);
+            chip.setBackground(new Color(30, 58, 138)); // Bleu foncé vibrant (plus jamais blanc !)
+            chip.setForeground(Color.WHITE);
             chip.setFocusPainted(false);
             chip.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             chip.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(PRIMARY_COLOR, 1, true),
-                    new EmptyBorder(4, 10, 4, 10)
+                    BorderFactory.createLineBorder(new Color(59, 130, 246), 1, true),
+                    new EmptyBorder(6, 12, 6, 12)
             ));
             chip.addActionListener(e -> {
                 usernameField.setText(suggestion);
