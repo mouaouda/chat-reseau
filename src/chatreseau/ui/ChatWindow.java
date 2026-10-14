@@ -130,8 +130,8 @@ public class ChatWindow extends JFrame implements NetworkManager.NetworkListener
         addSystemMessage(GENERAL_CHANNEL_ID,
                 "Bienvenue " + networkManager.getMyUsername() + " ! Vous ne pouvez discuter qu'avec les personnes présentes sur votre réseau local.");
 
-        // Vérification automatique des mises à jour GitHub Releases (via gh)
-        Timer updateCheckTimer = new Timer(2500, e -> UpdateManager.checkForUpdatesAsync(this, false));
+        // Vérification automatique des mises à jour GitHub Releases à chaque ouverture de l'application
+        Timer updateCheckTimer = new Timer(1500, e -> UpdateManager.checkOnStartup(this));
         updateCheckTimer.setRepeats(false);
         updateCheckTimer.start();
 

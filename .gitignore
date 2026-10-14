@@ -1,3 +1,11 @@
 out/
+dist/
+build_input/
 *.class
+*.jar
+*.zip
 .system_generated/
+apply_chat_update.bat
+apply_update.bat
+CHAT_RESEAU_update.jar
+test_*.jar

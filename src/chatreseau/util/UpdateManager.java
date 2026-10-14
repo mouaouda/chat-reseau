@@ -6,12 +6,12 @@ import chatreseau.ui.NotificationToast;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
@@ -24,6 +24,9 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -35,20 +38,34 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Gestionnaire de mise à jour automatique via GitHub Releases en utilisant `gh` (GitHub CLI)
- * avec repli automatique sur l'API REST GitHub.
+ * GÃƒÂ¨re la vÃƒÂ©rification automatique des mises ÃƒÂ  jour sur GitHub Releases (via `gh` ou API REST),
+ * le tÃƒÂ©lÃƒÂ©chargement du nouveau `.jar` / `.exe` et le redÃƒÂ©marrage automatique en 1 clic.
  */
 public class UpdateManager {
 
-    public static final String CURRENT_VERSION = "v1.0.0";
+    public static final String CURRENT_VERSION = "v1.0.1";
     public static final String GITHUB_REPO = "mouaouda/chat-reseau";
 
     public record ReleaseInfo(String tagName, String name, String body, String url) {
     }
 
     /**
-     * Vérifie la présence d'une nouvelle version sur GitHub.
-     * Exécuté en tâche de fond.
+     * VÃƒÂ©rification automatique au lancement de l'application.
+     * Si une nouvelle version existe, propose ÃƒÂ  l'utilisateur de l'installer en 1 clic.
+     */
+    public static void checkOnStartup(JFrame parent) {
+        Thread.startVirtualThread(() -> {
+            ReleaseInfo latest = fetchLatestRelease();
+            if (latest != null && latest.tagName() != null) {
+                if (compareVersions(latest.tagName(), CURRENT_VERSION) > 0) {
+                    SwingUtilities.invokeLater(() -> promptAutoUpdate(parent, latest));
+                }
+            }
+        });
+    }
+
+    /**
+     * VÃƒÂ©rification manuelle dÃƒÂ©clenchÃƒÂ©e par le bouton "Mises ÃƒÂ  jour GitHub".
      */
     public static void checkForUpdatesAsync(JFrame parent, boolean notifyIfUpToDate) {
         Thread.startVirtualThread(() -> {
@@ -58,9 +75,9 @@ public class UpdateManager {
                     if (notifyIfUpToDate) {
                         SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
                                 parent,
-                                "Aucune release GitHub trouvée pour " + GITHUB_REPO + ".\n" +
+                                "Aucune release GitHub trouvÃƒÂ©e pour " + GITHUB_REPO + ".\n" +
                                         "Assurez-vous qu'une release existe sur GitHub via `gh release create`.",
-                                "Mises à jour",
+                                "Mises ÃƒÂ  jour",
                                 JOptionPane.INFORMATION_MESSAGE
                         ));
                     }
@@ -70,24 +87,14 @@ public class UpdateManager {
                 boolean isNewer = compareVersions(latest.tagName(), CURRENT_VERSION) > 0;
                 SwingUtilities.invokeLater(() -> {
                     if (isNewer) {
-                        // Toast Discord de mise à jour
-                        NotificationToast toast = new NotificationToast(
-                                "Mise à jour disponible !",
-                                "• " + latest.tagName(),
-                                "Nouvelle version disponible sur GitHub. Cliquez pour mettre à jour.",
-                                () -> showUpdateDialog(parent, latest)
-                        );
-                        toast.showNotification();
-
-                        // Afficher la boîte de dialogue si demandé manuellement
-                        if (notifyIfUpToDate) {
-                            showUpdateDialog(parent, latest);
-                        }
+                        promptAutoUpdate(parent, latest);
                     } else if (notifyIfUpToDate) {
                         JOptionPane.showMessageDialog(
                                 parent,
-                                "Votre application est à jour !\nVersion actuelle : " + CURRENT_VERSION + "\nDernière release GitHub : " + latest.tagName(),
-                                "À jour",
+                                "Votre application est dÃƒÂ©jÃƒÂ  ÃƒÂ  jour !\n" +
+                                        "Version installÃƒÂ©e : " + CURRENT_VERSION + "\n" +
+                                        "DerniÃƒÂ¨re release sur GitHub : " + latest.tagName(),
+                                "Application ÃƒÂ  jour",
                                 JOptionPane.INFORMATION_MESSAGE
                         );
                     }
@@ -96,8 +103,8 @@ public class UpdateManager {
                 if (notifyIfUpToDate) {
                     SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
                             parent,
-                            "Erreur lors de la vérification de mise à jour :\n" + ex.getMessage(),
-                            "Erreur de mise à jour",
+                            "Erreur lors de la vÃƒÂ©rification de mise ÃƒÂ  jour :\n" + ex.getMessage(),
+                            "Erreur",
                             JOptionPane.WARNING_MESSAGE
                     ));
                 }
@@ -106,10 +113,269 @@ public class UpdateManager {
     }
 
     /**
-     * Récupère la dernière release en utilisant d'abord la commande `gh`, puis l'API GitHub en secours.
+     * Affiche une boÃƒÂ®te de dialogue proposant de mettre ÃƒÂ  jour et redÃƒÂ©marrer en 1 clic.
+     */
+    public static void promptAutoUpdate(JFrame parent, ReleaseInfo release) {
+        // Affiche aussi un toast discret
+        NotificationToast toast = new NotificationToast(
+                "Mise ÃƒÂ  jour disponible !",
+                "Ã¢â‚¬Â¢ " + release.tagName(),
+                "Nouvelle version prÃƒÂªte ÃƒÂ  ÃƒÂªtre installÃƒÂ©e.",
+                () -> promptAutoUpdate(parent, release)
+        );
+        toast.showNotification();
+
+        JDialog dialog = new JDialog(parent, "Mise ÃƒÂ  jour disponible : " + release.tagName(), true);
+        dialog.setSize(530, 410);
+        dialog.setLocationRelativeTo(parent);
+        dialog.setLayout(new BorderLayout());
+        dialog.getContentPane().setBackground(new Color(24, 25, 28));
+
+        // En-tÃƒÂªte
+        JPanel header = new JPanel();
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+        header.setBackground(new Color(32, 34, 37));
+        header.setBorder(new EmptyBorder(16, 20, 16, 20));
+
+        JLabel titleLbl = new JLabel("Nouvelle version disponible : " + release.tagName());
+        titleLbl.setFont(new Font("Segoe UI", Font.BOLD, 17));
+        titleLbl.setForeground(Color.WHITE);
+
+        JLabel currentLbl = new JLabel("Version actuelle : " + CURRENT_VERSION + "  Ã¢Å¾â€  DerniÃƒÂ¨re version : " + release.tagName());
+        currentLbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        currentLbl.setForeground(new Color(96, 165, 250));
+
+        header.add(titleLbl);
+        header.add(Box.createVerticalStrut(4));
+        header.add(currentLbl);
+
+        // Notes de release
+        JTextArea notesArea = new JTextArea();
+        notesArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        notesArea.setEditable(false);
+        notesArea.setLineWrap(true);
+        notesArea.setWrapStyleWord(true);
+        notesArea.setBackground(new Color(43, 45, 49));
+        notesArea.setForeground(new Color(220, 221, 222));
+        notesArea.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        String notesText = (release.body() != null && !release.body().isBlank())
+                ? release.body()
+                : "Nouvelle version disponible avec amÃƒÂ©liorations et correctifs.";
+        notesArea.setText("Notes de mise ÃƒÂ  jour (" + release.name() + ") :\n\n" + notesText);
+
+        JScrollPane scrollNotes = new JScrollPane(notesArea);
+        scrollNotes.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 20));
+        scrollNotes.getViewport().setBackground(new Color(24, 25, 28));
+
+        // Barre infÃƒÂ©rieure avec boutons modernes
+        JPanel bottomBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 12));
+        bottomBar.setBackground(new Color(32, 34, 37));
+
+        ModernButton applyNowBtn = new ModernButton("Installer & RedÃƒÂ©marrer", new Color(37, 99, 235));
+        applyNowBtn.setPreferredSize(new Dimension(180, 38));
+        applyNowBtn.addActionListener(e -> {
+            dialog.dispose();
+            downloadAndApplyUpdate(parent, release.tagName());
+        });
+
+        ModernButton openBrowserBtn = new ModernButton("Voir sur GitHub", new Color(5, 150, 105));
+        openBrowserBtn.setPreferredSize(new Dimension(130, 38));
+        openBrowserBtn.addActionListener(e -> {
+            try {
+                if (release.url() != null && !release.url().isEmpty()) {
+                    Desktop.getDesktop().browse(URI.create(release.url()));
+                }
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(dialog, "Impossible d'ouvrir le navigateur : " + ex.getMessage());
+            }
+        });
+
+        ModernButton laterBtn = new ModernButton("Plus tard", new Color(71, 85, 105));
+        laterBtn.setPreferredSize(new Dimension(90, 38));
+        laterBtn.addActionListener(e -> dialog.dispose());
+
+        bottomBar.add(applyNowBtn);
+        bottomBar.add(openBrowserBtn);
+        bottomBar.add(laterBtn);
+
+        dialog.add(header, BorderLayout.NORTH);
+        dialog.add(scrollNotes, BorderLayout.CENTER);
+        dialog.add(bottomBar, BorderLayout.SOUTH);
+        dialog.setVisible(true);
+    }
+
+    /**
+     * TÃƒÂ©lÃƒÂ©charge la mise ÃƒÂ  jour et applique le remplacement avec redÃƒÂ©marrage automatique.
+     */
+    private static void downloadAndApplyUpdate(JFrame parent, String tag) {
+        JDialog progressDialog = new JDialog(parent, "Mise ÃƒÂ  jour en cours...", true);
+        progressDialog.setSize(380, 140);
+        progressDialog.setLocationRelativeTo(parent);
+        progressDialog.setLayout(new BorderLayout());
+
+        JPanel p = new JPanel();
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        p.setBorder(new EmptyBorder(16, 20, 16, 20));
+        p.setBackground(new Color(24, 25, 28));
+
+        JLabel statusLbl = new JLabel("TÃƒÂ©lÃƒÂ©chargement de la version " + tag + " depuis GitHub...");
+        statusLbl.setForeground(Color.WHITE);
+        statusLbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+
+        JProgressBar bar = new JProgressBar();
+        bar.setIndeterminate(true);
+
+        p.add(statusLbl);
+        p.add(Box.createVerticalStrut(14));
+        p.add(bar);
+        progressDialog.add(p, BorderLayout.CENTER);
+
+        Thread.startVirtualThread(() -> {
+            try {
+                File tempUpdatedJar = new File(System.getProperty("java.io.tmpdir"), "CHAT_RESEAU_update.jar");
+                if (tempUpdatedJar.exists()) {
+                    tempUpdatedJar.delete();
+                }
+
+                // 1. Essai de tÃƒÂ©lÃƒÂ©chargement avec `gh`
+                boolean downloaded = false;
+                try {
+                    ProcessBuilder pb = new ProcessBuilder("gh", "release", "download", tag, "-R", GITHUB_REPO, "-p", "CHAT_RESEAU.jar", "--output", tempUpdatedJar.getAbsolutePath(), "--clobber");
+                    pb.redirectErrorStream(true);
+                    Process proc = pb.start();
+                    if (proc.waitFor() == 0 && tempUpdatedJar.exists() && tempUpdatedJar.length() > 1000) {
+                        downloaded = true;
+                    }
+                } catch (Exception ignored) {
+                }
+
+                // 2. Repli de tÃƒÂ©lÃƒÂ©chargement HTTPS direct si gh n'est pas disponible
+                if (!downloaded) {
+                    String downloadUrl = "https://github.com/" + GITHUB_REPO + "/releases/download/" + tag + "/CHAT_RESEAU.jar";
+                    HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS).build();
+                    HttpRequest req = HttpRequest.newBuilder().uri(URI.create(downloadUrl)).GET().build();
+                    HttpResponse<InputStream> resp = client.send(req, HttpResponse.BodyHandlers.ofInputStream());
+
+                    if (resp.statusCode() == 200) {
+                        try (InputStream in = resp.body(); FileOutputStream out = new FileOutputStream(tempUpdatedJar)) {
+                            in.transferTo(out);
+                            downloaded = true;
+                        }
+                    }
+                }
+
+                if (!downloaded || !tempUpdatedJar.exists() || tempUpdatedJar.length() < 1000) {
+                    SwingUtilities.invokeLater(() -> {
+                        progressDialog.dispose();
+                        JOptionPane.showMessageDialog(
+                                parent,
+                                "Impossible de tÃƒÂ©lÃƒÂ©charger le fichier de mise ÃƒÂ  jour depuis GitHub.\n" +
+                                        "VÃƒÂ©rifiez votre connexion ou tÃƒÂ©lÃƒÂ©chargez directement depuis GitHub Releases.",
+                                "Erreur de tÃƒÂ©lÃƒÂ©chargement",
+                                JOptionPane.ERROR_MESSAGE
+                        );
+                    });
+                    return;
+                }
+
+                // 3. DÃƒÂ©terminer l'emplacement cible et le mode d'exÃƒÂ©cution (.exe ou .jar)
+                File currentJar = detectCurrentJarPath();
+                File appDir = currentJar.getParentFile();
+                File parentOfApp = (appDir != null) ? appDir.getParentFile() : null;
+                File exeInParent = (parentOfApp != null) ? new File(parentOfApp, "ChatReseau.exe") : null;
+
+                boolean isRunningAsExe = (exeInParent != null && exeInParent.exists());
+                File executableToRun = isRunningAsExe ? exeInParent : null;
+
+                if (!isRunningAsExe) {
+                    File localExe = new File("dist/ChatReseau/ChatReseau.exe");
+                    if (localExe.exists()) {
+                        executableToRun = localExe;
+                    }
+                }
+
+                // CrÃƒÂ©er le script batch temporaire qui attend la fermeture de la JVM, remplace le JAR et relance
+                File updaterScript = new File(System.getProperty("java.io.tmpdir"), "apply_chat_update.bat");
+                StringBuilder batch = new StringBuilder();
+                batch.append("@echo off\r\n");
+                batch.append("chcp 65001 >nul\r\n");
+                batch.append("timeout /t 1 /nobreak >nul\r\n");
+
+                // Boucle de copie avec rÃƒÂ©essais en cas de verrouillage temporaire Windows
+                batch.append("set /a retries=0\r\n");
+                batch.append(":retry_copy\r\n");
+                batch.append("copy /y \"").append(tempUpdatedJar.getAbsolutePath()).append("\" \"").append(currentJar.getAbsolutePath()).append("\" >nul 2>&1\r\n");
+                batch.append("if errorlevel 1 (\r\n");
+                batch.append("    set /a retries+=1\r\n");
+                batch.append("    if %retries% lss 10 (\r\n");
+                batch.append("        timeout /t 1 /nobreak >nul\r\n");
+                batch.append("        goto retry_copy\r\n");
+                batch.append("    )\r\n");
+                batch.append(")\r\n");
+
+                // Si un second jar existe (ex: dist/ChatReseau/app/CHAT_RESEAU.jar en dev), on le synchronise
+                File distAppJar = new File("dist/ChatReseau/app/CHAT_RESEAU.jar");
+                if (distAppJar.exists() && !distAppJar.getAbsoluteFile().equals(currentJar.getAbsoluteFile())) {
+                    batch.append("copy /y \"").append(tempUpdatedJar.getAbsolutePath()).append("\" \"").append(distAppJar.getAbsolutePath()).append("\" >nul 2>&1\r\n");
+                }
+
+                // Supprimer le fichier temporaire
+                batch.append("del /f /q \"").append(tempUpdatedJar.getAbsolutePath()).append("\" >nul 2>&1\r\n");
+
+                // Relancer l'application (.exe ou .jar)
+                if (isRunningAsExe && executableToRun != null) {
+                    batch.append("start \"\" \"").append(executableToRun.getAbsolutePath()).append("\"\r\n");
+                } else {
+                    File javaBin = new File(System.getProperty("java.home"), "bin/javaw.exe");
+                    String javaCmd = javaBin.exists() ? "\"" + javaBin.getAbsolutePath() + "\"" : "javaw";
+                    batch.append("start \"\" ").append(javaCmd).append(" -jar \"").append(currentJar.getAbsolutePath()).append("\"\r\n");
+                }
+
+                // Le script supprime sa propre trace
+                batch.append("del \"%~f0\"\r\n");
+
+                try (FileOutputStream fos = new FileOutputStream(updaterScript)) {
+                    fos.write(batch.toString().getBytes(StandardCharsets.ISO_8859_1));
+                }
+
+                SwingUtilities.invokeLater(() -> {
+                    progressDialog.dispose();
+                    try {
+                        new ProcessBuilder("cmd.exe", "/c", updaterScript.getAbsolutePath()).start();
+                        System.exit(0);
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(parent, "Erreur au redÃƒÂ©marrage : " + ex.getMessage());
+                    }
+                });
+
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    progressDialog.dispose();
+                    JOptionPane.showMessageDialog(parent, "Erreur lors de la mise ÃƒÂ  jour : " + ex.getMessage());
+                });
+            }
+        });
+
+        progressDialog.setVisible(true);
+    }
+
+    private static File detectCurrentJarPath() {
+        try {
+            File codeSource = new File(UpdateManager.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            if (codeSource.isFile() && codeSource.getName().endsWith(".jar")) {
+                return codeSource.getAbsoluteFile();
+            }
+        } catch (Exception ignored) {
+        }
+        return new File("CHAT_RESEAU.jar").getAbsoluteFile();
+    }
+
+    /**
+     * RÃƒÂ©cupÃƒÂ¨re les infos de la derniÃƒÂ¨re release en utilisant d'abord `gh`, puis l'API GitHub en secours.
      */
     public static ReleaseInfo fetchLatestRelease() {
-        // 1. Essai prioritaire avec la commande `gh`
+        // 1. Essai avec la commande `gh`
         try {
             ProcessBuilder pb = new ProcessBuilder("gh", "release", "view", "-R", GITHUB_REPO, "--json", "tagName,name,body,url");
             pb.redirectErrorStream(true);
@@ -166,128 +432,6 @@ public class UpdateManager {
         return null;
     }
 
-    /**
-     * Boîte de dialogue affichant la nouvelle version disponible avec téléchargement via `gh`.
-     */
-    public static void showUpdateDialog(JFrame parent, ReleaseInfo release) {
-        JDialog dialog = new JDialog(parent, "Mise à jour disponible : " + release.tagName(), true);
-        dialog.setSize(520, 380);
-        dialog.setLocationRelativeTo(parent);
-        dialog.setLayout(new BorderLayout());
-        dialog.getContentPane().setBackground(new Color(24, 25, 28));
-
-        JPanel header = new JPanel();
-        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
-        header.setBackground(new Color(32, 34, 37));
-        header.setBorder(new EmptyBorder(16, 20, 16, 20));
-
-        JLabel titleLbl = new JLabel("🚀 Nouvelle version disponible : " + release.tagName());
-        titleLbl.setFont(new Font("Segoe UI", Font.BOLD, 17));
-        titleLbl.setForeground(Color.WHITE);
-
-        JLabel currentLbl = new JLabel("Version actuelle : " + CURRENT_VERSION + "  ➔  Dernière version : " + release.tagName());
-        currentLbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        currentLbl.setForeground(new Color(88, 101, 242));
-
-        header.add(titleLbl);
-        header.add(Box.createVerticalStrut(4));
-        header.add(currentLbl);
-
-        // Notes de release
-        JTextArea notesArea = new JTextArea();
-        notesArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        notesArea.setEditable(false);
-        notesArea.setLineWrap(true);
-        notesArea.setWrapStyleWord(true);
-        notesArea.setBackground(new Color(43, 45, 49));
-        notesArea.setForeground(new Color(220, 221, 222));
-        notesArea.setBorder(new EmptyBorder(10, 10, 10, 10));
-
-        String notesText = (release.body() != null && !release.body().isBlank())
-                ? release.body()
-                : "Aucune note de release fournie pour cette version.";
-        notesArea.setText("Notes de mise à jour (" + release.name() + ") :\n\n" + notesText);
-
-        JScrollPane scrollNotes = new JScrollPane(notesArea);
-        scrollNotes.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 20));
-        scrollNotes.getViewport().setBackground(new Color(24, 25, 28));
-
-        // Boutons d'action
-        JPanel bottomBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 12));
-        bottomBar.setBackground(new Color(32, 34, 37));
-
-        ModernButton updateWithGhBtn = new ModernButton("Telecharger via gh", new Color(88, 101, 242));
-        updateWithGhBtn.setPreferredSize(new Dimension(170, 36));
-        updateWithGhBtn.addActionListener(e -> {
-            Thread.startVirtualThread(() -> runGhDownload(dialog, release.tagName()));
-        });
-
-        ModernButton openBrowserBtn = new ModernButton("Voir sur GitHub", new Color(5, 150, 105));
-        openBrowserBtn.setPreferredSize(new Dimension(140, 36));
-        openBrowserBtn.addActionListener(e -> {
-            try {
-                if (release.url() != null && !release.url().isEmpty()) {
-                    Desktop.getDesktop().browse(URI.create(release.url()));
-                }
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(dialog, "Impossible d'ouvrir le navigateur : " + ex.getMessage());
-            }
-        });
-
-        ModernButton closeBtn = new ModernButton("Fermer", new Color(71, 85, 105));
-        closeBtn.setPreferredSize(new Dimension(90, 36));
-        closeBtn.addActionListener(e -> dialog.dispose());
-
-        bottomBar.add(updateWithGhBtn);
-        bottomBar.add(openBrowserBtn);
-        bottomBar.add(closeBtn);
-
-        dialog.add(header, BorderLayout.NORTH);
-        dialog.add(scrollNotes, BorderLayout.CENTER);
-        dialog.add(bottomBar, BorderLayout.SOUTH);
-        dialog.setVisible(true);
-    }
-
-    private static void runGhDownload(JDialog parentDialog, String tag) {
-        try {
-            ProcessBuilder pb = new ProcessBuilder("gh", "release", "download", tag, "-R", GITHUB_REPO, "--clobber");
-            pb.redirectErrorStream(true);
-            Process p = pb.start();
-            int code = p.waitFor();
-            if (code == 0) {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(
-                            parentDialog,
-                            "Mise à jour " + tag + " téléchargée avec succès avec `gh` !\n" +
-                                    "Les fichiers ont été placés dans le dossier de l'application.",
-                            "Téléchargement réussi",
-                            JOptionPane.INFORMATION_MESSAGE
-                    );
-                });
-            } else {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(
-                            parentDialog,
-                            "Aucun asset binaire n'est attaché à la release " + tag + ".\n" +
-                                    "Vous pouvez consulter la page de la release sur GitHub.",
-                            "Information",
-                            JOptionPane.INFORMATION_MESSAGE
-                    );
-                });
-            }
-        } catch (Exception ex) {
-            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
-                    parentDialog,
-                    "Erreur lors de l'exécution de gh release download : " + ex.getMessage(),
-                    "Erreur",
-                    JOptionPane.ERROR_MESSAGE
-            ));
-        }
-    }
-
-    /**
-     * Compare deux versions au format "v1.2.3". Retourne > 0 si v1 > v2.
-     */
     public static int compareVersions(String v1, String v2) {
         if (v1 == null) return -1;
         if (v2 == null) return 1;
