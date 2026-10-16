@@ -8,7 +8,7 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo [1/2] Build JavaFX avec Gradle (Java 25)...
+echo [1/2] Build JavaFX avec Gradle (Java 21)...
 gradle clean jar
 if %ERRORLEVEL% NEQ 0 (
     echo [ERREUR] Echec du build Gradle.
