@@ -1,21 +1,30 @@
 @echo off
 chcp 65001 >nul
-echo Compilation du projet Java...
-if not exist out mkdir out
-javac -encoding UTF-8 -d out src\chatreseau\model\*.java src\chatreseau\network\*.java src\chatreseau\util\*.java src\chatreseau\ui\*.java src\chatreseau\Main.java
-if %errorlevel% neq 0 (
-    echo [ERREUR] Erreur lors de la compilation.
+
+where gradle >nul 2>nul
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERREUR] Gradle n'est pas installe ou n'est pas dans le PATH.
     if "%1" neq "--no-pause" pause
-    exit /b %errorlevel%
+    exit /b 1
 )
 
-echo Création du fichier exécutable CHAT_RESEAU.jar...
-jar cfe CHAT_RESEAU.jar chatreseau.Main -C out .
-if %errorlevel% equ 0 (
-    echo [SUCCÈS] Fichier CHAT_RESEAU.jar créé avec succès !
-) else (
-    echo [ERREUR] Échec de la création du fichier .jar.
+echo [1/2] Build JavaFX avec Gradle (Java 25)...
+gradle clean jar
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERREUR] Echec du build Gradle.
     if "%1" neq "--no-pause" pause
-    exit /b %errorlevel%
+    exit /b 1
 )
+
+echo.
+echo [2/2] Copie du jar final vers CHAT_RESEAU.jar...
+if exist build\libs\CHAT_RESEAU.jar (
+    copy /y build\libs\CHAT_RESEAU.jar CHAT_RESEAU.jar >nul
+    echo [SUCCES] CHAT_RESEAU.jar cree avec succes.
+) else (
+    echo [ERREUR] build\libs\CHAT_RESEAU.jar introuvable.
+    if "%1" neq "--no-pause" pause
+    exit /b 1
+)
+
 if "%1" neq "--no-pause" pause
