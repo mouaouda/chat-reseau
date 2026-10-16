@@ -3,73 +3,60 @@ package chatreseau;
 import chatreseau.network.NetworkManager;
 import chatreseau.ui.ChatWindow;
 import chatreseau.ui.LoginDialog;
+import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+import javafx.stage.Stage;
 
-import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Point d'entrée principal de l'application Chat Réseau Local.
+ * Point d'entree JavaFX principal de l'application Chat Reseau Local.
+ * Tout le client est maintenant construit sur JavaFX / Java 25.
  */
-public class Main {
+public class Main extends Application {
 
-    private static final AtomicInteger OPEN_WINDOWS = new AtomicInteger(0);
+    private NetworkManager networkManager;
 
-    public static void main(String[] args) {
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception ignored) {
-        }
+    @Override
+    public void start(Stage primaryStage) {
+        networkManager = new NetworkManager();
 
-        SwingUtilities.invokeLater(Main::launchNewClientInstance);
-    }
-
-    /**
-     * Lance une instance complète du client (Inscription avec le Nom -> Vérification -> Fenêtre de Chat).
-     * Permet également d'ouvrir plusieurs fenêtres sur le même PC pour tester le réseau local.
-     */
-    public static void launchNewClientInstance() {
-        NetworkManager networkManager = new NetworkManager();
         try {
             networkManager.startNetworkServices();
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(
-                    null,
-                    "Impossible de démarrer les services réseau local : " + e.getMessage(),
-                    "Erreur Réseau",
-                    JOptionPane.ERROR_MESSAGE
-            );
-            if (OPEN_WINDOWS.get() == 0) {
-                System.exit(1);
-            }
+            Alert alert = new Alert(Alert.AlertType.ERROR,
+                    "Impossible de demarrer les services reseau local : " + e.getMessage(),
+                    ButtonType.OK);
+            alert.showAndWait();
+            Platform.exit();
             return;
         }
 
-        LoginDialog loginDialog = new LoginDialog(null, networkManager, null);
-        String chosenIdentity = loginDialog.showDialog();
-
+        String chosenIdentity = LoginDialog.show(primaryStage, networkManager, null);
         if (chosenIdentity == null || chosenIdentity.isBlank()) {
             networkManager.shutdown();
-            if (OPEN_WINDOWS.get() == 0) {
-                System.exit(0);
-            }
+            Platform.exit();
             return;
         }
 
-        OPEN_WINDOWS.incrementAndGet();
         ChatWindow chatWindow = new ChatWindow(networkManager);
-        chatWindow.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent e) {
-                if (OPEN_WINDOWS.decrementAndGet() <= 0) {
-                    System.exit(0);
-                }
-            }
-        });
-        chatWindow.setVisible(true);
+        Scene scene = new Scene(chatWindow.getRoot(), 1100, 720);
+        primaryStage.setTitle("Chat Reseau Local");
+        primaryStage.setScene(scene);
+        primaryStage.show();
+    }
+
+    @Override
+    public void stop() {
+        if (networkManager != null) {
+            networkManager.shutdown();
+        }
+    }
+
+    public static void main(String[] args) {
+        launch(args);
     }
 }
